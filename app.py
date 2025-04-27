@@ -176,17 +176,33 @@ elif menu == "Dashboard" and st.session_state.logged_in:
         st.plotly_chart(fig2, use_container_width=True)
 
 # ------------------ FILE UPLOAD ------------------
+
 elif menu == "Upload Data" and st.session_state.logged_in:
     st.subheader("📤 Upload CSV Files")
+
     uploaded = {}
     for label in ["Households", "Transactions", "Products"]:
         uploaded[label] = st.file_uploader(f"Upload {label}.csv", type="csv")
 
-    if st.button("Update Azure Tables") and all(uploaded.values()):
-        for table, file in uploaded.items():
-            df = pd.read_csv(file)
-            df.to_sql(table, con=engine, if_exists="replace", index=False)
-        st.success("✅ All tables updated successfully!")
+    if st.button("Update Azure Tables"):
+        if all(uploaded.values()):
+            with st.spinner('Uploading to Azure SQL Database...'):
+                try:
+                    # 🧠 Always re-create fresh small connection
+                    engine = create_engine(f"mssql+pyodbc:///?odbc_connect={params}")
+                    conn = engine.connect()
+
+                    for table, file in uploaded.items():
+                        df = pd.read_csv(file)
+                        df.columns = df.columns.str.strip()  # clean headers
+                        df.to_sql(table, con=conn, if_exists="replace", index=False)
+
+                    st.success("✅ All tables uploaded successfully to Azure!")
+                except Exception as e:
+                    st.error(f"❌ Upload failed: {str(e)}")
+        else:
+            st.warning("⚠️ Please upload all three files before updating.")
+
 
 # ------------------ INTERACTIVE DATA PULL ------------------
 elif menu == "Data Pull" and st.session_state.logged_in:
